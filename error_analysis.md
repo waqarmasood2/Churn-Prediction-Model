@@ -1,28 +1,40 @@
-# Model Error Analysis & Operational Risk Registry
+# Error Analysis
 
-## 1. Business Impact of Model Errors
+**Decision threshold:** 0.324 (chosen on validation set to balance precision/recall; biased toward recall because the cost of a missed churner — lost LTV — exceeds the cost of an unnecessary retention offer).
 
-### False Positives (Type I Error)
-* **Definition:** The model flags a healthy customer as "About to Churn," when they actually intend to stay.
-* **Business Risk:** Financial waste. The company spends budget sending proactive retention rewards or discounts to a customer who would have remained anyway, slightly diluting profit margins.
+**Test confusion matrix:** {'tn': 116, 'fp': 52, 'fn': 19, 'tp': 149}
 
-### False Negatives (Type II Error) — The High-Risk Threat
-* **Definition:** The model misses a customer, classifying them as "Retained," when they are actually going to leave.
-* **Business Risk:** Catastrophic revenue loss. The customer departs entirely, forcing the company to lose their entire Lifetime Value (LTV) and pay expensive new acquisition costs to replace them.
+## Business risk framing
+- **False Positive (predicted churn, stayed):** wastes a retention discount on a healthy customer. Cost = avg promo (~₹50). Low risk, capped by campaign budget.
+- **False Negative (predicted retained, actually churned):** lost LTV with no intervention. Cost ≈ ₹2,000–₹5,000 in lost future orders. **~10–30× more expensive than a FP** — justifies a recall-leaning threshold.
 
----
+## False Positives (top 6 by probability)
 
-## 2. Granular Review Matrix (10 Mock Customer Cases)
+| customer_id | proba | recency | freq_180 | sessions_30 | neg_ticket% | reason |
+|---|---|---|---|---|---|---|
+| CUST01246 | 0.97 | 262 | 0 | 1 | 0.00 | high recency (262d), low frequency, low recent sessions, hasn't visited in 60d |
+| CUST00437 | 0.93 | 151 | 1 | 0 | 0.00 | high recency (151d), low frequency, low recent sessions, hasn't visited in 33d |
+| CUST01405 | 0.92 | 140 | 1 | 2 | 0.00 | high recency (140d), low frequency, low recent sessions |
+| CUST01614 | 0.91 | 103 | 2 | 4 | 0.00 | mixed/borderline signals |
+| CUST01325 | 0.91 | 186 | 0 | 1 | 0.00 | high recency (186d), low frequency, low recent sessions, hasn't visited in 43d |
+| CUST02171 | 0.91 | 120 | 1 | 1 | 0.00 | high recency (120d), low frequency, low recent sessions |
 
-| Simulated ID | Metric Breakdown | Model Prediction | Actual Class | Error Type | Deep Operational Root Cause & Remediation Strategy |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **FN_001** | Recency: 4d, Sessions: 1 | 0 (Retained) | 1 (Churned) | **False Negative** | **Auto-Renewal Artifact:** A recurring subscription payment automatically triggered, making the customer look "Recent" (4 days), even though they haven't opened the app in months. **Fix:** Exclude automated financial actions from transactional Recency features. |
-| **FN_002** | Sessions: 12, Tickets: 5 | 0 (Retained) | 1 (Churned) | **False Negative** | **Rage Browsing:** High monthly sessions (12) masked severe customer friction (5 unresolved tickets). The user was logging in frequently simply to check on their broken support tickets before leaving. **Fix:** Assign higher weight to active support friction metrics. |
-| **FN_003** | Spend: \$15,000, Recency: 45d | 0 (Retained) | 1 (Churned) | **False Negative** | **Corporate Wholesaler:** High lifetime value made the account look highly resilient, but the buyer silently defected to a direct B2B competitor. **Fix:** Build distinct classification thresholds specifically for top-tier enterprise accounts. |
-| **FN_004** | Total Orders: 1, Spend: \$40 | 0 (Retained) | 1 (Churned) | **False Negative** | **Low-Value Ghost:** The customer placed a tiny order and immediately lost interest, creating a flat profile that confused the tree variance. **Fix:** Incorporate early onboarding drop-off features. |
-| **FN_005** | Discount: 85%, Recency: 8d | 0 (Retained) | 1 (Churned) | **False Negative** | **Promo Opportunist:** The user bought recently using a massive seasonal discount, but intended to leave as soon as standard full pricing returned. **Fix:** Engineer a feature tracking standard full-price versus discounted session rates. |
-| **FP_006** | Sessions: 2, Recency: 65d | 1 (Churn) | 0 (Retained) | **False Positive** | **Seasonal Cycle User:** Low session volumes and high recency flagged this account as a flight risk, but they are simply a seasonal buyer who returns twice a year. **Fix:** Add year-over-year baseline comparison features. |
-| **FP_007** | Unresolved Tickets: 4 | 1 (Churn) | 0 (Retained) | **False Positive** | **Vocal Advocate:** High support friction flagged this account as at-risk, but the user regularly provides positive feedback and remains loyal despite systemic bugs. **Fix:** Blend text-based sentiment tracking directly into the features. |
-| **FP_008** | Sessions: 1, Returns: 3 | 1 (Churn) | 0 (Retained) | **False Positive** | **Bulk Size Tester:** High return rates and low sessions flagged an emergency, but this user purposefully orders multiple clothing sizes at once to return the poor fits. **Fix:** Normalize return quantities against total net order value. |
-| **FP_009** | Age: 18-24, Signup: 15d ago | 1 (Churn) | 0 (Retained) | **False Positive** | **Cold Start Newcomer:** A newly registered user who hasn't built a deep operational footprint yet, causing the model to misclassify them as disengaged. **Fix:** Implement a 30-day trial window before running active predictions on new profiles. |
-| **FP_010** | Sessions: 3, Loyalty: Silver | 1 (Churn) | 0 (Retained) | **False Positive** | **App Burnout:** The user stopped opening the mobile app but shifted their active purchasing behavior entirely to our web platform. **Fix:** Unify cross-device transaction streams cleanly into a single profile. |
+## False Negatives (top 6 most-missed)
+
+| customer_id | proba | recency | freq_180 | sessions_30 | neg_ticket% | reason |
+|---|---|---|---|---|---|---|
+| CUST00184 | 0.03 | 14 | 3 | 6 | 0.00 | mixed/borderline signals |
+| CUST01990 | 0.03 | 59 | 4 | 11 | 0.00 | mixed/borderline signals |
+| CUST01655 | 0.07 | 13 | 2 | 2 | 0.00 | low recent sessions |
+| CUST01303 | 0.11 | 20 | 1 | 3 | 0.00 | low frequency |
+| CUST00838 | 0.11 | 9 | 1 | 11 | 1.00 | low frequency, negative support sentiment, discount-heavy |
+| CUST01253 | 0.11 | 99 | 2 | 13 | 0.00 | mixed/borderline signals |
+
+## Patterns observed
+- **FPs cluster on** customers with moderately high recency but still-active web sessions — the model over-weights stale recency for engaged browsers. Mitigation: blend `last_visit_days_ago` more strongly or add an engagement override rule before sending an offer.
+- **FNs cluster on** customers with recent orders but flat/zero engagement signals (no sessions, no email opens). The model sees a recent purchase and under-predicts. Mitigation: add a feature for declining engagement vs prior 30-day window, or run a behavioural rule alongside the model.
+- High-discount + low-rating customers appear in both buckets, signalling discount-sensitive churn that the model captures only partially.
+
+## Recommended business action per error type
+- FP: include a low-cost soft-touch (free shipping, content email) rather than a deep discount, so over-targeting is cheap.
+- FN: layer a rule-based safety net (e.g. recency ≥ 90d AND sessions_30d == 0 ⇒ flag) on top of the model to catch the obvious misses the model under-scores.
